@@ -24,7 +24,7 @@
     lyricsContent: document.getElementById("lyricsContent"),
     lyricsEditor: document.getElementById("lyricsEditor"),
     editToggleBtn: document.getElementById("editToggleBtn"),
-    resetScrollBtn: document.getElementById("resetScrollBtn"),
+    autoScrollToggleBtn: document.getElementById("autoScrollToggleBtn"),
     fontDecreaseBtn: document.getElementById("fontDecreaseBtn"),
     fontIncreaseBtn: document.getElementById("fontIncreaseBtn"),
   };
