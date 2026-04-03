@@ -60,18 +60,6 @@
     }
 
 
-    .player-card {
-      padding: 12px;
-    }
-    
-    #playerFrame {
-      display: block;
-      width: 100%;
-      height: 140px;
-      border: 0;
-      border-radius: 16px;
-      background: #0b0d11;
-    }
 
 
     .topbar {
