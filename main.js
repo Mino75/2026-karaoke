@@ -7,6 +7,14 @@
   const MESSAGE_TYPE_TRACK_CHANGE = "karaoke-track-change";
   const MESSAGE_TYPE_PLAYBACK_STATE = "karaoke-playback-state";
 
+  const FONT_STORAGE_KEY = "karaoke_lyrics_font_size";
+  const DEFAULT_FONT_SIZE = 1.35;
+  const MIN_FONT_SIZE = 1.0;
+  const MAX_FONT_SIZE = 2.4;
+  const FONT_STEP = 0.12;
+
+  const USER_SCROLL_PAUSE_MS = 4000;
+
   const els = {
     mediaMeta: document.getElementById("mediaMeta"),
     title: document.getElementById("title"),
@@ -17,6 +25,8 @@
     lyricsEditor: document.getElementById("lyricsEditor"),
     editToggleBtn: document.getElementById("editToggleBtn"),
     resetScrollBtn: document.getElementById("resetScrollBtn"),
+    fontDecreaseBtn: document.getElementById("fontDecreaseBtn"),
+    fontIncreaseBtn: document.getElementById("fontIncreaseBtn"),
   };
 
   const state = {
@@ -24,13 +34,14 @@
     currentRecord: null,
     isEditing: false,
     scrollRAF: null,
-    scrollStartMs: 0,
-    scrollDurationMs: 0,
-    scrollTo: 0,
     lastMediaKey: null,
     currentTime: 0,
     duration: 0,
     playbackState: "paused",
+    fontSize: DEFAULT_FONT_SIZE,
+    isUserInteractingScroll: false,
+    userScrollPauseUntil: 0,
+    suppressScrollEvent: false,
   };
 
   // -----------------------------
@@ -114,8 +125,35 @@
     els.lyricsEditor.value = nextText;
   }
 
+  function clamp(value, min, max) {
+    return Math.min(max, Math.max(min, value));
+  }
+
   // -----------------------------
-  // Scroll engine
+  // Font size management
+  // -----------------------------
+  function loadFontSize() {
+    const raw = localStorage.getItem(FONT_STORAGE_KEY);
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) return DEFAULT_FONT_SIZE;
+    return clamp(parsed, MIN_FONT_SIZE, MAX_FONT_SIZE);
+  }
+
+  function applyFontSize(size) {
+    state.fontSize = clamp(size, MIN_FONT_SIZE, MAX_FONT_SIZE);
+    document.documentElement.style.setProperty("--lyrics-font-size", `${state.fontSize}rem`);
+    localStorage.setItem(FONT_STORAGE_KEY, String(state.fontSize));
+
+    els.fontDecreaseBtn.disabled = state.fontSize <= MIN_FONT_SIZE;
+    els.fontIncreaseBtn.disabled = state.fontSize >= MAX_FONT_SIZE;
+
+    requestAnimationFrame(() => {
+      syncScrollToPlayback();
+    });
+  }
+
+  // -----------------------------
+  // Scroll engine using native scrollTop
   // -----------------------------
   function cancelAutoScroll() {
     if (state.scrollRAF) {
@@ -124,81 +162,86 @@
     }
   }
 
-  function applyScroll(y) {
-    els.lyricsContent.style.transform = `translateY(${-y}px)`;
-  }
-
-  function computeExternalScrollPlan() {
+  function getMaxScroll() {
     const viewport = els.lyricsViewport;
-    const content = els.lyricsContent;
-    const durationSec = Math.max(0, Math.round(state.duration || 0));
-
-    if (!viewport || !content) return null;
-
-    const maxScroll = Math.max(0, content.scrollHeight - viewport.clientHeight);
-
-    if (!maxScroll || durationSec <= 0) {
-      return {
-        to: 0,
-        durationMs: 0,
-      };
-    }
-
-    return {
-      to: maxScroll,
-      durationMs: durationSec * 1000,
-    };
+    return Math.max(0, viewport.scrollHeight - viewport.clientHeight);
   }
 
-  function restartAutoScrollFromExternalState() {
+  function setViewportScroll(y) {
+    const viewport = els.lyricsViewport;
+    const maxScroll = getMaxScroll();
+    const nextY = clamp(y, 0, maxScroll);
+
+    state.suppressScrollEvent = true;
+    viewport.scrollTop = nextY;
+    requestAnimationFrame(() => {
+      state.suppressScrollEvent = false;
+    });
+  }
+
+  function computeTargetScrollFromPlayback() {
+    const durationSec = Math.max(0, state.duration || 0);
+    const currentTimeSec = clamp(state.currentTime || 0, 0, durationSec);
+    const maxScroll = getMaxScroll();
+
+    if (durationSec <= 0 || maxScroll <= 0) return 0;
+
+    const progress = currentTimeSec / durationSec;
+    return maxScroll * progress;
+  }
+
+  function shouldPauseForManualScroll() {
+    return Date.now() < state.userScrollPauseUntil;
+  }
+
+  function syncScrollToPlayback() {
     cancelAutoScroll();
 
     if (state.isEditing) return;
 
-    const plan = computeExternalScrollPlan();
-    if (!plan) return;
-
-    state.scrollTo = plan.to;
-    state.scrollDurationMs = plan.durationMs;
-
-    if (plan.durationMs <= 0 || plan.to <= 0) {
-      applyScroll(0);
-      return;
-    }
-
-    const currentMs = Math.min(
-      Math.max(0, Math.round(state.currentTime || 0)) * 1000,
-      plan.durationMs
-    );
-
-    const initialProgress = currentMs / plan.durationMs;
-    const initialY = plan.to * initialProgress;
-
-    applyScroll(initialY);
-    state.scrollStartMs = performance.now() - currentMs;
+    const targetY = computeTargetScrollFromPlayback();
+    setViewportScroll(targetY);
 
     if (state.playbackState !== "playing") return;
+    if (shouldPauseForManualScroll()) return;
 
-    const tick = (now) => {
+    const tick = () => {
       if (state.isEditing || state.playbackState !== "playing") {
         state.scrollRAF = null;
         return;
       }
 
-      const elapsed = Math.min(now - state.scrollStartMs, state.scrollDurationMs);
-      const progress = state.scrollDurationMs > 0 ? elapsed / state.scrollDurationMs : 0;
-      const y = state.scrollTo * progress;
-
-      applyScroll(y);
-
-      if (elapsed < state.scrollDurationMs) {
-        state.scrollRAF = requestAnimationFrame(tick);
-      } else {
+      if (shouldPauseForManualScroll()) {
         state.scrollRAF = null;
+        return;
       }
+
+      const target = computeTargetScrollFromPlayback();
+      const current = els.lyricsViewport.scrollTop;
+      const delta = target - current;
+
+      // smoothing léger pour garder un scroll fluide tout en laissant
+      // la main à l’utilisateur dès qu’il intervient
+      const next = Math.abs(delta) < 1 ? target : current + delta * 0.08;
+
+      setViewportScroll(next);
+      state.scrollRAF = requestAnimationFrame(tick);
     };
 
     state.scrollRAF = requestAnimationFrame(tick);
+  }
+
+  function restartAutoScrollFromExternalState(force = false) {
+    if (force) {
+      state.userScrollPauseUntil = 0;
+    }
+    syncScrollToPlayback();
+  }
+
+  function registerManualScrollIntent() {
+    if (state.suppressScrollEvent || state.isEditing) return;
+    state.userScrollPauseUntil = Date.now() + USER_SCROLL_PAUSE_MS;
+    cancelAutoScroll();
   }
 
   // -----------------------------
@@ -223,7 +266,7 @@
     renderLyrics(els.lyricsEditor.value);
 
     requestAnimationFrame(() => {
-      restartAutoScrollFromExternalState();
+      restartAutoScrollFromExternalState(true);
     });
   }
 
@@ -238,7 +281,7 @@
     renderLyrics(nextText);
 
     requestAnimationFrame(() => {
-      restartAutoScrollFromExternalState();
+      restartAutoScrollFromExternalState(true);
     });
   }
 
@@ -248,7 +291,7 @@
   async function loadLyricsFromIncomingTrack(payload) {
     const title = payload?.title || "Untitled";
     const durationSec = Math.round(payload?.duration || 0);
-    const currentTime = Math.round(payload?.currentTime || 0);
+    const currentTime = Number(payload?.currentTime || 0);
     const playbackState = payload?.state || "paused";
 
     if (!title || durationSec <= 0) return;
@@ -275,6 +318,7 @@
     }
 
     state.lastMediaKey = mediaKey;
+    state.userScrollPauseUntil = 0;
 
     let record = await getRecord(mediaKey);
 
@@ -301,13 +345,13 @@
 
     if (!state.isEditing) {
       requestAnimationFrame(() => {
-        restartAutoScrollFromExternalState();
+        restartAutoScrollFromExternalState(true);
       });
     }
   }
 
   function handlePlaybackStateMessage(payload) {
-    state.currentTime = Math.round(payload?.currentTime || 0);
+    state.currentTime = Number(payload?.currentTime || 0);
     state.duration = Math.round(payload?.duration || state.duration || 0);
     state.playbackState = payload?.state || "paused";
 
@@ -317,7 +361,7 @@
     );
 
     if (!state.isEditing) {
-      restartAutoScrollFromExternalState();
+      syncScrollToPlayback();
     }
   }
 
@@ -355,17 +399,33 @@
     });
 
     els.resetScrollBtn.addEventListener("click", () => {
-      restartAutoScrollFromExternalState();
+      restartAutoScrollFromExternalState(true);
+    });
+
+    els.fontDecreaseBtn.addEventListener("click", () => {
+      applyFontSize(state.fontSize - FONT_STEP);
+    });
+
+    els.fontIncreaseBtn.addEventListener("click", () => {
+      applyFontSize(state.fontSize + FONT_STEP);
     });
 
     els.lyricsEditor.addEventListener("input", () => {
       els.lyricsContent.textContent = els.lyricsEditor.value;
+    });
 
-      requestAnimationFrame(() => {
-        if (state.isEditing) {
-          computeExternalScrollPlan();
-        }
-      });
+    els.lyricsViewport.addEventListener("wheel", registerManualScrollIntent, { passive: true });
+    els.lyricsViewport.addEventListener("touchstart", registerManualScrollIntent, { passive: true });
+    els.lyricsViewport.addEventListener("touchmove", registerManualScrollIntent, { passive: true });
+    els.lyricsViewport.addEventListener("pointerdown", registerManualScrollIntent, { passive: true });
+    els.lyricsViewport.addEventListener("scroll", () => {
+      if (!state.suppressScrollEvent) {
+        registerManualScrollIntent();
+      }
+    });
+
+    window.addEventListener("resize", () => {
+      syncScrollToPlayback();
     });
   }
 
@@ -374,6 +434,9 @@
   // -----------------------------
   async function init() {
     state.db = await openDb();
+    state.fontSize = loadFontSize();
+    applyFontSize(state.fontSize);
+
     bindUi();
     bindPlayerMessages();
     setStatus("idle");
