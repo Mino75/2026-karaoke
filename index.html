@@ -20,15 +20,6 @@
           <p id="mediaMeta">Waiting for track…</p>
         </div>
       </div>
-
-      <button
-        id="editToggleBtn"
-        class="icon-btn"
-        type="button"
-        aria-label="Edit lyrics"
-      >
-        ✍️
-      </button>
     </header>
 
     <main class="shell">
@@ -45,13 +36,43 @@
       <section class="card lyrics-card">
         <div class="section-head">
           <span class="label">Lyrics</span>
-          <button
-            id="resetScrollBtn"
-            class="ghost-btn"
-            type="button"
-          >
-            Restart scroll
-          </button>
+
+          <div class="lyrics-actions">
+            <button
+              id="fontDecreaseBtn"
+              class="ghost-btn"
+              type="button"
+              aria-label="Decrease font size"
+            >
+              A-
+            </button>
+
+            <button
+              id="fontIncreaseBtn"
+              class="ghost-btn"
+              type="button"
+              aria-label="Increase font size"
+            >
+              A+
+            </button>
+
+            <button
+              id="resetScrollBtn"
+              class="ghost-btn"
+              type="button"
+            >
+              Restart scroll
+            </button>
+
+            <button
+              id="editToggleBtn"
+              class="icon-btn"
+              type="button"
+              aria-label="Edit lyrics"
+            >
+              ✍️
+            </button>
+          </div>
         </div>
 
         <div id="lyricsViewport" class="lyrics-viewport">
@@ -70,7 +91,6 @@
         <div class="section-head">
           <span class="label">Player</span>
         </div>
-
       </section>
     </main>
   </div>
