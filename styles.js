@@ -59,6 +59,21 @@
       padding: 14px 14px var(--safe-bottom);
     }
 
+
+    .player-card {
+      padding: 12px;
+    }
+    
+    #playerFrame {
+      display: block;
+      width: 100%;
+      height: 140px;
+      border: 0;
+      border-radius: 16px;
+      background: #0b0d11;
+    }
+
+
     .topbar {
       position: sticky;
       top: 0;
