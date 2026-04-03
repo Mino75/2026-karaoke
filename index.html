@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover"
+  />
+  <title>Karaoke Lyrics</title>
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand__dot"></div>
+        <div>
+          <h1>Karaoke Lyrics</h1>
+          <p id="mediaMeta">Waiting for media…</p>
+        </div>
+      </div>
+
+      <button id="editToggleBtn" class="icon-btn" type="button" aria-label="Edit lyrics">
+        ✍️
+      </button>
+    </header>
+
+    <main class="shell">
+      <section class="card now">
+        <div class="label">Current track</div>
+        <h2 id="title">Unknown title</h2>
+        <div class="meta-row">
+          <span id="duration">--:--</span>
+          <span id="status" class="status">idle</span>
+        </div>
+      </section>
+
+      <section class="card lyrics-card">
+        <div class="section-head">
+          <span class="label">Lyrics</span>
+          <button id="resetScrollBtn" class="ghost-btn" type="button">Restart scroll</button>
+        </div>
+
+        <div id="lyricsViewport" class="lyrics-viewport">
+          <div id="lyricsContent" class="lyrics-content"></div>
+        </div>
+
+        <textarea
+          id="lyricsEditor"
+          class="lyrics-editor hidden"
+          placeholder="Paste or write lyrics here…"
+          spellcheck="false"
+        ></textarea>
+      </section>
+    </main>
+  </div>
+
+  <script src="./styles.js"></script>
+  <script src="./main.js"></script>
+</body>
+</html>
