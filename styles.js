@@ -21,6 +21,10 @@
       --topbar-bg: rgba(8, 9, 11, 0.78);
       --viewport-h: 60dvh;
       --viewport-min-h: 340px;
+
+      --lyrics-font-size: 1.35rem;
+      --lyrics-font-size-min: 1rem;
+      --lyrics-font-size-max: 2.4rem;
     }
 
     * {
@@ -58,9 +62,6 @@
       min-height: 100dvh;
       padding: 14px 14px var(--safe-bottom);
     }
-
-
-
 
     .topbar {
       position: sticky;
@@ -118,8 +119,7 @@
     }
 
     .card {
-      background:
-        linear-gradient(180deg, var(--panel), var(--panel-strong));
+      background: linear-gradient(180deg, var(--panel), var(--panel-strong));
       border: 1px solid var(--line);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
@@ -184,6 +184,15 @@
       justify-content: space-between;
       gap: 10px;
       margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+
+    .lyrics-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
     }
 
     .icon-btn,
@@ -231,41 +240,48 @@
 
     .ghost-btn {
       padding: 10px 12px;
-      font-size: 0.86rem;
+      font-size: 0.92rem;
       line-height: 1;
+      min-height: 44px;
     }
 
     .lyrics-viewport {
       position: relative;
       height: var(--viewport-h);
       min-height: var(--viewport-min-h);
-      overflow: hidden;
+      overflow-y: auto;
+      overflow-x: hidden;
       border-radius: 16px;
       border: 1px solid var(--line);
       background:
         linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.015));
       isolation: isolate;
+      scroll-behavior: auto;
+      -webkit-overflow-scrolling: touch;
     }
 
     .lyrics-viewport::before,
     .lyrics-viewport::after {
       content: "";
-      position: absolute;
+      position: sticky;
       left: 0;
       right: 0;
       z-index: 2;
       pointer-events: none;
+      display: block;
       height: 32px;
     }
 
     .lyrics-viewport::before {
       top: 0;
       background: linear-gradient(180deg, rgba(10, 11, 15, 0.95), rgba(10, 11, 15, 0));
+      margin-bottom: -32px;
     }
 
     .lyrics-viewport::after {
       bottom: 0;
       background: linear-gradient(180deg, rgba(10, 11, 15, 0), rgba(10, 11, 15, 0.95));
+      margin-top: -32px;
     }
 
     .lyrics-content {
@@ -273,10 +289,8 @@
       white-space: pre-wrap;
       word-break: break-word;
       line-height: 1.9;
-      font-size: 1.08rem;
+      font-size: var(--lyrics-font-size);
       letter-spacing: 0.01em;
-      will-change: transform;
-      transform: translateY(0);
     }
 
     .lyrics-editor {
@@ -290,6 +304,7 @@
       color: var(--text);
       padding: 18px;
       line-height: 1.7;
+      font-size: var(--lyrics-font-size);
       outline: none;
     }
 
@@ -306,6 +321,7 @@
       :root {
         --pad: 18px;
         --viewport-h: 62dvh;
+        --lyrics-font-size: 1.5rem;
       }
 
       #app {
@@ -319,7 +335,6 @@
       .lyrics-content {
         padding-left: 26px;
         padding-right: 26px;
-        font-size: 1.22rem;
       }
 
       .brand p {
