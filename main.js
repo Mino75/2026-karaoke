@@ -3,6 +3,10 @@
   const DB_VERSION = 1;
   const STORE_NAME = "lyrics";
 
+  const PLAYER_ORIGIN = "https://shenyin.kahiether.com";
+  const MESSAGE_TYPE_TRACK_CHANGE = "karaoke-track-change";
+  const MESSAGE_TYPE_PLAYBACK_STATE = "karaoke-playback-state";
+
   const els = {
     mediaMeta: document.getElementById("mediaMeta"),
     title: document.getElementById("title"),
@@ -17,16 +21,16 @@
 
   const state = {
     db: null,
-    currentMediaEl: null,
     currentRecord: null,
     isEditing: false,
     scrollRAF: null,
     scrollStartMs: 0,
     scrollDurationMs: 0,
-    scrollFrom: 0,
     scrollTo: 0,
     lastMediaKey: null,
-    mutationObserver: null,
+    currentTime: 0,
+    duration: 0,
+    playbackState: "paused",
   };
 
   // -----------------------------
@@ -82,9 +86,8 @@
       .toLowerCase();
   }
 
-  function safeDurationSeconds(value) {
-    if (!Number.isFinite(value) || value <= 0) return 0;
-    return Math.round(value);
+  function buildMediaKeyFromPayload(title, duration) {
+    return `${normalizeTitle(title)}::${Math.round(duration || 0)}`;
   }
 
   function formatTime(totalSeconds) {
@@ -94,43 +97,21 @@
     return `${m}:${String(r).padStart(2, "0")}`;
   }
 
-  function getPublishedMediaTitle() {
-    const mediaSessionTitle =
-      navigator.mediaSession &&
-      navigator.mediaSession.metadata &&
-      typeof navigator.mediaSession.metadata.title === "string"
-        ? navigator.mediaSession.metadata.title
-        : "";
-
-    return mediaSessionTitle || document.title || "Unknown title";
-  }
-
-  function buildMediaIdentity(mediaEl) {
-    const title = getPublishedMediaTitle();
-    const durationSec = safeDurationSeconds(mediaEl?.duration || 0);
-    const mediaKey = `${normalizeTitle(title)}::${durationSec}`;
-
-    return {
-      title,
-      durationSec,
-      mediaKey,
-    };
-  }
-
   function setStatus(text, mode = "") {
-    els.status.textContent = text;
+    els.status.textContent = text || "idle";
     els.status.className = `status ${mode}`.trim();
   }
 
-  function setMetaUI(identity) {
-    els.title.textContent = identity.title || "Unknown title";
-    els.duration.textContent = formatTime(identity.durationSec);
-    els.mediaMeta.textContent = `${identity.title} • ${formatTime(identity.durationSec)}`;
+  function setMetaUI(title, durationSec) {
+    els.title.textContent = title || "Unknown title";
+    els.duration.textContent = formatTime(durationSec);
+    els.mediaMeta.textContent = `${title || "Unknown title"} • ${formatTime(durationSec)}`;
   }
 
   function renderLyrics(text) {
-    els.lyricsContent.textContent = text || "";
-    els.lyricsEditor.value = text || "";
+    const nextText = text || "";
+    els.lyricsContent.textContent = nextText;
+    els.lyricsEditor.value = nextText;
   }
 
   // -----------------------------
@@ -143,45 +124,40 @@
     }
   }
 
-  function computeScrollPlan() {
+  function applyScroll(y) {
+    els.lyricsContent.style.transform = `translateY(${-y}px)`;
+  }
+
+  function computeExternalScrollPlan() {
     const viewport = els.lyricsViewport;
     const content = els.lyricsContent;
-    const media = state.currentMediaEl;
+    const durationSec = Math.max(0, Math.round(state.duration || 0));
 
-    if (!viewport || !content || !media) return null;
+    if (!viewport || !content) return null;
 
     const maxScroll = Math.max(0, content.scrollHeight - viewport.clientHeight);
-    const durationSec = safeDurationSeconds(media.duration || 0);
 
     if (!maxScroll || durationSec <= 0) {
       return {
-        from: 0,
         to: 0,
         durationMs: 0,
       };
     }
 
     return {
-      from: 0,
       to: maxScroll,
       durationMs: durationSec * 1000,
     };
   }
 
-  function applyScroll(y) {
-    els.lyricsContent.style.transform = `translateY(${-y}px)`;
-  }
-
-  function restartAutoScroll({ syncToCurrentTime = true } = {}) {
+  function restartAutoScrollFromExternalState() {
     cancelAutoScroll();
 
     if (state.isEditing) return;
-    if (!state.currentMediaEl) return;
 
-    const plan = computeScrollPlan();
+    const plan = computeExternalScrollPlan();
     if (!plan) return;
 
-    state.scrollFrom = plan.from;
     state.scrollTo = plan.to;
     state.scrollDurationMs = plan.durationMs;
 
@@ -190,11 +166,10 @@
       return;
     }
 
-    const media = state.currentMediaEl;
-    const currentMs =
-      syncToCurrentTime && Number.isFinite(media.currentTime)
-        ? Math.min(media.currentTime * 1000, plan.durationMs)
-        : 0;
+    const currentMs = Math.min(
+      Math.max(0, Math.round(state.currentTime || 0)) * 1000,
+      plan.durationMs
+    );
 
     const initialProgress = currentMs / plan.durationMs;
     const initialY = plan.to * initialProgress;
@@ -202,8 +177,10 @@
     applyScroll(initialY);
     state.scrollStartMs = performance.now() - currentMs;
 
+    if (state.playbackState !== "playing") return;
+
     const tick = (now) => {
-      if (!state.currentMediaEl || state.currentMediaEl.paused || state.isEditing) {
+      if (state.isEditing || state.playbackState !== "playing") {
         state.scrollRAF = null;
         return;
       }
@@ -221,9 +198,7 @@
       }
     };
 
-    if (!media.paused) {
-      state.scrollRAF = requestAnimationFrame(tick);
-    }
+    state.scrollRAF = requestAnimationFrame(tick);
   }
 
   // -----------------------------
@@ -240,12 +215,16 @@
       els.editToggleBtn.textContent = "Save";
       els.editToggleBtn.setAttribute("aria-label", "Save lyrics");
       els.lyricsEditor.focus();
-    } else {
-      els.editToggleBtn.textContent = "✍️";
-      els.editToggleBtn.setAttribute("aria-label", "Edit lyrics");
-      renderLyrics(els.lyricsEditor.value);
-      requestAnimationFrame(() => restartAutoScroll({ syncToCurrentTime: true }));
+      return;
     }
+
+    els.editToggleBtn.textContent = "✍️";
+    els.editToggleBtn.setAttribute("aria-label", "Edit lyrics");
+    renderLyrics(els.lyricsEditor.value);
+
+    requestAnimationFrame(() => {
+      restartAutoScrollFromExternalState();
+    });
   }
 
   async function saveCurrentLyrics() {
@@ -258,41 +237,52 @@
     await putRecord(state.currentRecord);
     renderLyrics(nextText);
 
-    // Important: changing lyrics changes scroll height, so recompute immediately.
     requestAnimationFrame(() => {
-      restartAutoScroll({ syncToCurrentTime: true });
+      restartAutoScrollFromExternalState();
     });
   }
 
   // -----------------------------
-  // Media detection
+  // Incoming player messages
   // -----------------------------
-  async function onPotentialNewMedia(mediaEl) {
-    if (!mediaEl) return;
+  async function loadLyricsFromIncomingTrack(payload) {
+    const title = payload?.title || "Untitled";
+    const durationSec = Math.round(payload?.duration || 0);
+    const currentTime = Math.round(payload?.currentTime || 0);
+    const playbackState = payload?.state || "paused";
 
-    // wait until duration becomes usable
-    const identity = buildMediaIdentity(mediaEl);
+    if (!title || durationSec <= 0) return;
 
-    if (!identity.title || identity.durationSec <= 0) {
+    const mediaKey = buildMediaKeyFromPayload(title, durationSec);
+
+    state.currentTime = currentTime;
+    state.duration = durationSec;
+    state.playbackState = playbackState;
+
+    if (state.lastMediaKey === mediaKey) {
+      setMetaUI(title, durationSec);
+      setStatus(
+        playbackState,
+        playbackState === "playing" ? "playing" : playbackState === "paused" ? "paused" : ""
+      );
+
+      if (!state.isEditing) {
+        requestAnimationFrame(() => {
+          restartAutoScrollFromExternalState();
+        });
+      }
       return;
     }
 
-    if (identity.mediaKey === state.lastMediaKey) {
-      setMetaUI(identity);
-      return;
-    }
+    state.lastMediaKey = mediaKey;
 
-    state.currentMediaEl = mediaEl;
-    state.lastMediaKey = identity.mediaKey;
-    setMetaUI(identity);
-
-    let record = await getRecord(identity.mediaKey);
+    let record = await getRecord(mediaKey);
 
     if (!record) {
       record = {
-        mediaKey: identity.mediaKey,
-        title: identity.title,
-        durationSec: identity.durationSec,
+        mediaKey,
+        title,
+        durationSec,
         lyrics: "",
         createdAt: Date.now(),
         updatedAt: Date.now(),
@@ -301,123 +291,52 @@
     }
 
     state.currentRecord = record;
+
+    setMetaUI(title, durationSec);
+    setStatus(
+      playbackState,
+      playbackState === "playing" ? "playing" : playbackState === "paused" ? "paused" : ""
+    );
     renderLyrics(record.lyrics || "");
-    setStatus(mediaEl.paused ? "paused" : "playing", mediaEl.paused ? "paused" : "playing");
 
-    requestAnimationFrame(() => restartAutoScroll({ syncToCurrentTime: true }));
-  }
-
-  function attachMediaListeners(mediaEl) {
-    if (!mediaEl || mediaEl.__karaokeBound) return;
-    mediaEl.__karaokeBound = true;
-
-    mediaEl.addEventListener("play", async () => {
-      setStatus("playing", "playing");
-      await onPotentialNewMedia(mediaEl);
-      restartAutoScroll({ syncToCurrentTime: true });
-    });
-
-    mediaEl.addEventListener("pause", () => {
-      setStatus("paused", "paused");
-      cancelAutoScroll();
-    });
-
-    mediaEl.addEventListener("ended", () => {
-      setStatus("ended");
-      cancelAutoScroll();
-    });
-
-    mediaEl.addEventListener("timeupdate", () => {
-      // if user seeks or timing drifts, resync softly
-      if (!state.isEditing && !mediaEl.paused && mediaEl === state.currentMediaEl && !state.scrollRAF) {
-        restartAutoScroll({ syncToCurrentTime: true });
-      }
-    });
-
-    mediaEl.addEventListener("loadedmetadata", async () => {
-      await onPotentialNewMedia(mediaEl);
-    });
-
-    mediaEl.addEventListener("durationchange", async () => {
-      await onPotentialNewMedia(mediaEl);
-    });
-
-    mediaEl.addEventListener("seeked", () => {
-      if (!state.isEditing) {
-        restartAutoScroll({ syncToCurrentTime: true });
-      }
-    });
-  }
-
-  function scanMediaElements() {
-    const mediaNodes = document.querySelectorAll("audio, video");
-    mediaNodes.forEach(attachMediaListeners);
-  }
-
-  function observeDomForMedia() {
-    state.mutationObserver = new MutationObserver(() => {
-      scanMediaElements();
-    });
-
-    state.mutationObserver.observe(document.documentElement, {
-      childList: true,
-      subtree: true,
-    });
-  }
-
-  // -----------------------------
-  // Media Session hooks
-  // -----------------------------
-  function bindMediaSessionHooks() {
-    if (!("mediaSession" in navigator)) return;
-
-    try {
-      navigator.mediaSession.setActionHandler("play", async () => {
-        const media = state.currentMediaEl;
-        if (!media) return;
-        await media.play();
+    if (!state.isEditing) {
+      requestAnimationFrame(() => {
+        restartAutoScrollFromExternalState();
       });
-
-      navigator.mediaSession.setActionHandler("pause", () => {
-        const media = state.currentMediaEl;
-        if (!media) return;
-        media.pause();
-      });
-
-      navigator.mediaSession.setActionHandler("nexttrack", () => {
-        // Placeholder for future queue logic
-        console.log("Next track requested");
-      });
-
-      navigator.mediaSession.setActionHandler("previoustrack", () => {
-        // Placeholder for future queue logic
-        console.log("Previous track requested");
-      });
-    } catch (err) {
-      console.warn("Media Session action handler setup failed:", err);
     }
   }
 
-  function syncPositionState() {
-    if (!("mediaSession" in navigator)) return;
-    const media = state.currentMediaEl;
-    if (!media) return;
+  function handlePlaybackStateMessage(payload) {
+    state.currentTime = Math.round(payload?.currentTime || 0);
+    state.duration = Math.round(payload?.duration || state.duration || 0);
+    state.playbackState = payload?.state || "paused";
 
-    try {
-      if (
-        Number.isFinite(media.duration) &&
-        media.duration > 0 &&
-        Number.isFinite(media.currentTime)
-      ) {
-        navigator.mediaSession.setPositionState({
-          duration: media.duration,
-          playbackRate: media.playbackRate || 1,
-          position: media.currentTime,
-        });
-      }
-    } catch (err) {
-      // Ignore unsupported browsers
+    setStatus(
+      state.playbackState,
+      state.playbackState === "playing" ? "playing" : state.playbackState === "paused" ? "paused" : ""
+    );
+
+    if (!state.isEditing) {
+      restartAutoScrollFromExternalState();
     }
+  }
+
+  function bindPlayerMessages() {
+    window.addEventListener("message", async (event) => {
+      if (event.origin !== PLAYER_ORIGIN) return;
+
+      const data = event.data;
+      if (!data || !data.type || !data.payload) return;
+
+      if (data.type === MESSAGE_TYPE_TRACK_CHANGE) {
+        await loadLyricsFromIncomingTrack(data.payload);
+        return;
+      }
+
+      if (data.type === MESSAGE_TYPE_PLAYBACK_STATE) {
+        handlePlaybackStateMessage(data.payload);
+      }
+    });
   }
 
   // -----------------------------
@@ -436,25 +355,18 @@
     });
 
     els.resetScrollBtn.addEventListener("click", () => {
-      restartAutoScroll({ syncToCurrentTime: true });
+      restartAutoScrollFromExternalState();
     });
 
     els.lyricsEditor.addEventListener("input", () => {
-      // Re-render only in editor shadow state now; actual save persists to DB.
-      // Optional live preview recalculation:
       els.lyricsContent.textContent = els.lyricsEditor.value;
+
       requestAnimationFrame(() => {
-        const media = state.currentMediaEl;
-        if (!media) return;
-        const wasEditing = state.isEditing;
-        if (wasEditing) {
-          // recompute geometry while editing, final restart happens on save
-          computeScrollPlan();
+        if (state.isEditing) {
+          computeExternalScrollPlan();
         }
       });
     });
-
-    setInterval(syncPositionState, 1000);
   }
 
   // -----------------------------
@@ -463,10 +375,10 @@
   async function init() {
     state.db = await openDb();
     bindUi();
-    bindMediaSessionHooks();
-    scanMediaElements();
-    observeDomForMedia();
+    bindPlayerMessages();
     setStatus("idle");
+    setMetaUI("Waiting for track…", 0);
+    renderLyrics("");
   }
 
   init().catch((err) => {
