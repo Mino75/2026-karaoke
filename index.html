@@ -6,21 +6,27 @@
     name="viewport"
     content="width=device-width, initial-scale=1, viewport-fit=cover"
   />
-  <title>karaoke</title>
-  <link rel="manifest" href="./manifest.json">
+  <title>Karaoke</title>
+  <meta name="theme-color" content="#08090b" />
+  <link rel="manifest" href="./manifest.json" />
 </head>
 <body>
   <div id="app">
     <header class="topbar">
       <div class="brand">
-        <div class="brand__dot"></div>
+        <div class="brand__dot" aria-hidden="true"></div>
         <div>
           <h1>Karaoke Lyrics</h1>
-          <p id="mediaMeta">Waiting for media…</p>
+          <p id="mediaMeta">Waiting for track…</p>
         </div>
       </div>
 
-      <button id="editToggleBtn" class="icon-btn" type="button" aria-label="Edit lyrics">
+      <button
+        id="editToggleBtn"
+        class="icon-btn"
+        type="button"
+        aria-label="Edit lyrics"
+      >
         ✍️
       </button>
     </header>
@@ -29,8 +35,9 @@
       <section class="card now">
         <div class="label">Current track</div>
         <h2 id="title">Unknown title</h2>
+
         <div class="meta-row">
-          <span id="duration">--:--</span>
+          <span id="duration">0:00</span>
           <span id="status" class="status">idle</span>
         </div>
       </section>
@@ -38,7 +45,13 @@
       <section class="card lyrics-card">
         <div class="section-head">
           <span class="label">Lyrics</span>
-          <button id="resetScrollBtn" class="ghost-btn" type="button">Restart scroll</button>
+          <button
+            id="resetScrollBtn"
+            class="ghost-btn"
+            type="button"
+          >
+            Restart scroll
+          </button>
         </div>
 
         <div id="lyricsViewport" class="lyrics-viewport">
