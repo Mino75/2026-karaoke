@@ -41,6 +41,7 @@
     fontSize: DEFAULT_FONT_SIZE,
     isUserInteractingScroll: false,
     userScrollPauseUntil: 0,
+    autoScrollEnabled: true,
     suppressScrollEvent: false,
   };
 
@@ -90,6 +91,30 @@
   // -----------------------------
   // Helpers
   // -----------------------------
+  function updateAutoScrollUi() {
+  els.autoScrollToggleBtn.textContent = state.autoScrollEnabled
+    ? "Auto-scroll: ON"
+    : "Auto-scroll: OFF";
+
+  els.autoScrollToggleBtn.setAttribute(
+    "aria-pressed",
+    String(state.autoScrollEnabled)
+  );
+}
+
+function setAutoScrollEnabled(enabled) {
+  state.autoScrollEnabled = Boolean(enabled);
+  updateAutoScrollUi();
+
+  if (!state.autoScrollEnabled) {
+    cancelAutoScroll();
+    return;
+  }
+
+  syncScrollToPlayback();
+}
+  
+  
   function normalizeTitle(title) {
     return (title || "unknown title")
       .trim()
@@ -194,49 +219,58 @@
     return Date.now() < state.userScrollPauseUntil;
   }
 
-  function syncScrollToPlayback() {
-    cancelAutoScroll();
+function syncScrollToPlayback() {
+  cancelAutoScroll();
 
-    if (state.isEditing) return;
+  if (state.isEditing) return;
+  if (!state.autoScrollEnabled) return;
 
-    const targetY = computeTargetScrollFromPlayback();
-    setViewportScroll(targetY);
+  const targetY = computeTargetScrollFromPlayback();
+  setViewportScroll(targetY);
 
-    if (state.playbackState !== "playing") return;
-    if (shouldPauseForManualScroll()) return;
+  if (state.playbackState !== "playing") return;
+  if (shouldPauseForManualScroll()) return;
 
-    const tick = () => {
-      if (state.isEditing || state.playbackState !== "playing") {
-        state.scrollRAF = null;
-        return;
-      }
-
-      if (shouldPauseForManualScroll()) {
-        state.scrollRAF = null;
-        return;
-      }
-
-      const target = computeTargetScrollFromPlayback();
-      const current = els.lyricsViewport.scrollTop;
-      const delta = target - current;
-
-      // smoothing léger pour garder un scroll fluide tout en laissant
-      // la main à l’utilisateur dès qu’il intervient
-      const next = Math.abs(delta) < 1 ? target : current + delta * 0.08;
-
-      setViewportScroll(next);
-      state.scrollRAF = requestAnimationFrame(tick);
-    };
-
-    state.scrollRAF = requestAnimationFrame(tick);
-  }
-
-  function restartAutoScrollFromExternalState(force = false) {
-    if (force) {
-      state.userScrollPauseUntil = 0;
+  const tick = () => {
+    if (state.isEditing || state.playbackState !== "playing") {
+      state.scrollRAF = null;
+      return;
     }
-    syncScrollToPlayback();
+
+    if (!state.autoScrollEnabled) {
+      state.scrollRAF = null;
+      return;
+    }
+
+    if (shouldPauseForManualScroll()) {
+      state.scrollRAF = null;
+      return;
+    }
+
+    const target = computeTargetScrollFromPlayback();
+    const current = els.lyricsViewport.scrollTop;
+    const delta = target - current;
+    const next = Math.abs(delta) < 1 ? target : current + delta * 0.08;
+
+    setViewportScroll(next);
+    state.scrollRAF = requestAnimationFrame(tick);
+  };
+
+  state.scrollRAF = requestAnimationFrame(tick);
+}
+
+function restartAutoScrollFromExternalState(force = false) {
+  if (force) {
+    state.userScrollPauseUntil = 0;
   }
+
+  if (!state.autoScrollEnabled) {
+    cancelAutoScroll();
+    return;
+  }
+
+  syncScrollToPlayback();
+}
 
   function registerManualScrollIntent() {
     if (state.suppressScrollEvent || state.isEditing) return;
@@ -398,9 +432,9 @@
       }
     });
 
-    els.resetScrollBtn.addEventListener("click", () => {
-      restartAutoScrollFromExternalState(true);
-    });
+  els.autoScrollToggleBtn.addEventListener("click", () => {
+    setAutoScrollEnabled(!state.autoScrollEnabled);
+  });
 
     els.fontDecreaseBtn.addEventListener("click", () => {
       applyFontSize(state.fontSize - FONT_STEP);
@@ -439,9 +473,11 @@
 
     bindUi();
     bindPlayerMessages();
+    updateAutoScrollUi();
     setStatus("idle");
     setMetaUI("Waiting for track…", 0);
     renderLyrics("");
+    
   }
 
   init().catch((err) => {
