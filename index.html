@@ -19,6 +19,9 @@
         <div>
           <h1>Karaoke Lyrics</h1>
           <p id="mediaMeta">Waiting for track…</p>
+            <button id="exportBtn" aria-label="Export lyrics">📤</button>
+            <button id="importBtn" aria-label="Import lyrics">📥</button>
+            <input id="importFileInput" type="file" accept="application/json" hidden />
         </div>
       </div>
     </header>
@@ -92,9 +95,7 @@
       <section class="card player-card">
         <div class="section-head">
           <span class="label">Player</span>
-            <button id="exportBtn" aria-label="Export lyrics">📤</button>
-            <button id="importBtn" aria-label="Import lyrics">📥</button>
-            <input id="importFileInput" type="file" accept="application/json" hidden />
+
         </div>
       </section>
     </main>
