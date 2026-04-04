@@ -27,6 +27,9 @@
     autoScrollToggleBtn: document.getElementById("autoScrollToggleBtn"),
     fontDecreaseBtn: document.getElementById("fontDecreaseBtn"),
     fontIncreaseBtn: document.getElementById("fontIncreaseBtn"),
+    exportBtn: document.getElementById("exportBtn"),
+    importBtn: document.getElementById("importBtn"),
+    importFileInput: document.getElementById("importFileInput"),
   };
 
   const state = {
@@ -80,6 +83,14 @@
     });
   }
 
+  function getAllRecords() {
+    return new Promise((resolve, reject) => {
+      const req = txStore("readonly").getAll();
+      req.onsuccess = () => resolve(Array.isArray(req.result) ? req.result : []);
+      req.onerror = () => reject(req.error);
+    });
+  }
+  
   function putRecord(record) {
     return new Promise((resolve, reject) => {
       const req = txStore("readwrite").put(record);
@@ -154,6 +165,111 @@ function setAutoScrollEnabled(enabled) {
     return Math.min(max, Math.max(min, value));
   }
 
+  function downloadTextFile(filename, text, mimeType = "application/json") {
+    const blob = new Blob([text], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    URL.revokeObjectURL(url);
+  }
+
+  function sanitizeImportedRecord(item) {
+    if (!item || typeof item !== "object") return null;
+
+    const title = String(item.title || "").trim();
+    const durationSec = Math.round(
+      Number(
+        item.durationSec ??
+        item.duration ??
+        0
+      )
+    );
+
+    if (!title || durationSec <= 0) return null;
+
+    const mediaKey = buildMediaKeyFromPayload(title, durationSec);
+    const now = Date.now();
+
+    return {
+      mediaKey,
+      title,
+      durationSec,
+      lyrics: String(item.lyrics || ""),
+      createdAt: Number.isFinite(Number(item.createdAt)) ? Number(item.createdAt) : now,
+      updatedAt: now,
+    };
+  }
+
+  async function exportLyricsDatabase() {
+    const records = await getAllRecords();
+
+    const payload = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      total: records.length,
+      records: records.map((record) => ({
+        title: record.title || "",
+        durationSec: Math.round(record.durationSec || 0),
+        lyrics: record.lyrics || "",
+        createdAt: record.createdAt || Date.now(),
+        updatedAt: record.updatedAt || Date.now(),
+      })),
+    };
+
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    downloadTextFile(`karaoke-lyrics-export-${stamp}.json`, JSON.stringify(payload, null, 2));
+    setStatus(`exported ${records.length} record(s)`, "success");
+  }
+
+  async function importLyricsDatabaseFromFile(file) {
+    if (!file) return;
+
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+
+    const incomingRecords = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray(parsed?.records)
+      ? parsed.records
+      : [];
+
+    let importedCount = 0;
+
+    for (const item of incomingRecords) {
+      const normalized = sanitizeImportedRecord(item);
+      if (!normalized) continue;
+
+      // overwrite if same title + duration combination already exists
+      await putRecord(normalized);
+      importedCount += 1;
+    }
+
+    setStatus(`imported ${importedCount} record(s)`, "success");
+
+    // refresh current UI if imported record matches current track
+    if (state.lastMediaKey) {
+      const fresh = await getRecord(state.lastMediaKey);
+      if (fresh) {
+        state.currentRecord = fresh;
+        renderLyrics(fresh.lyrics || "");
+
+        if (!state.isEditing) {
+          requestAnimationFrame(() => {
+            restartAutoScrollFromExternalState(true);
+          });
+        }
+      }
+    }
+  }
+
+
+  
   // -----------------------------
   // Font size management
   // -----------------------------
@@ -432,6 +548,34 @@ function restartAutoScrollFromExternalState(force = false) {
       }
     });
 
+    els.exportBtn?.addEventListener("click", async () => {
+      try {
+        await exportLyricsDatabase();
+      } catch (err) {
+        console.error(err);
+        setStatus("export failed", "error");
+      }
+    });
+
+    els.importBtn?.addEventListener("click", () => {
+      if (!els.importFileInput) return;
+      els.importFileInput.value = "";
+      els.importFileInput.click();
+    });
+
+    els.importFileInput?.addEventListener("change", async (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      try {
+        await importLyricsDatabaseFromFile(file);
+      } catch (err) {
+        console.error(err);
+        setStatus("import failed", "error");
+      }
+    });
+
+    
   els.autoScrollToggleBtn.addEventListener("click", () => {
     setAutoScrollEnabled(!state.autoScrollEnabled);
   });
