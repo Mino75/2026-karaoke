@@ -337,6 +337,45 @@
         padding-right: 26px;
       }
 
+      .offset-row {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      
+      .offset-label {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        flex: 1 1 120px;
+        color: var(--muted);
+        font-size: 0.78rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      
+      .offset-input {
+        width: 100%;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        color: var(--text);
+        padding: 10px 12px;
+        font-size: 1rem;
+        outline: none;
+        -moz-appearance: textfield;
+      }
+      
+      .offset-input:focus {
+        border-color: var(--line-strong);
+      }
+      
+      .offset-input::-webkit-inner-spin-button,
+      .offset-input::-webkit-outer-spin-button {
+        opacity: 0.4;
+      }
+
+
       .brand p {
         max-width: 420px;
       }
