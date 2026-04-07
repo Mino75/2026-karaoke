@@ -376,6 +376,30 @@
       }
 
 
+      @keyframes emojiTraverse {
+        from { transform: translateX(-150px); }
+        to   { transform: translateX(calc(100vw + 150px)); }
+      }
+      
+      .emoji-runner {
+        position: fixed;
+        pointer-events: none;
+        z-index: 999;
+        line-height: 1;
+        will-change: transform;
+        animation: emojiTraverse linear forwards;
+      }
+      
+      @keyframes bgColorShift {
+        0%, 100% { background-position: 0% 50%; }
+        50%       { background-position: 100% 50%; }
+      }
+      
+      .lyrics-viewport.track-vibe {
+        background-size: 300% 300%;
+        animation: bgColorShift 8s ease infinite;
+      }
+      
       .brand p {
         max-width: 420px;
       }
