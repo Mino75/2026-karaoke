@@ -15,6 +15,8 @@
 
   const USER_SCROLL_PAUSE_MS = 4000;
 
+
+  
   const els = {
     mediaMeta: document.getElementById("mediaMeta"),
     title: document.getElementById("title"),
@@ -32,6 +34,53 @@
     importFileInput: document.getElementById("importFileInput"),
   };
 
+const TRACK_EMOJIS = [
+  {e:"🚴‍♀️",s:32},{e:"🚶",s:32},{e:"🚶🏾",s:32},{e:"🚗",s:32},
+  {e:"🛺",s:32},{e:"🚑",s:32},{e:"🚐",s:32},{e:"🚒",s:32},
+  {e:"🚛",s:32},{e:"🚚",s:32},{e:"🚕",s:32},{e:"🏎️",s:32},
+  {e:"🚙",s:32},{e:"🚜",s:32},{e:"🚓",s:32},{e:"🚌",s:36},
+  {e:"🛸",s:28},{e:"🪂",s:28},{e:"🚁",s:28},{e:"🐕",s:28},
+  {e:"🦬",s:28},{e:"🐄",s:28},{e:"🦌",s:28},{e:"🐖",s:28},
+  {e:"🐏",s:28},{e:"🐪",s:28},{e:"🦒",s:28},{e:"🐉",s:28},
+  {e:"🐦‍🔥",s:28},{e:"🧜‍♀️",s:28},{e:"🧚",s:28},
+  {e:"🦕",s:80},{e:"🦖",s:56},{e:"🦇",s:28},{e:"🦅",s:28},{e:"🕊️",s:28},
+];
+
+const VIVID_COLORS = ["#38bdf8","#fb923c","#a855f7","#ef4444","#34d399"];
+
+function pickRandom(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function fireTrackAnimation() {
+  // — emoji —
+  const pick = pickRandom(TRACK_EMOJIS);
+  const el = document.createElement("span");
+  el.className = "emoji-runner";
+  el.textContent = pick.e;
+  el.style.fontSize = pick.s + "px";
+  // position verticale random entre 10% et 80% de la fenêtre
+  el.style.top = (10 + Math.random() * 70) + "vh";
+  const dur = 3000 + Math.random() * 3000; // 3–6s
+  el.style.animationDuration = dur + "ms";
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), dur + 200);
+
+  // — couleurs fond —
+  const c1 = VIVID_COLORS[Math.floor(Math.random() * VIVID_COLORS.length)];
+  let c2;
+  do { c2 = VIVID_COLORS[Math.floor(Math.random() * VIVID_COLORS.length)]; }
+  while (c2 === c1);
+
+  const vp = els.lyricsViewport;
+  vp.style.background = `linear-gradient(135deg, ${c1}18, ${c2}18, rgba(255,255,255,0.015))`;
+  vp.classList.add("track-vibe");
+}
+
+
+
+
+  
   const state = {
     db: null,
     currentRecord: null,
@@ -46,6 +95,8 @@
     userScrollPauseUntil: 0,
     autoScrollEnabled: true,
     suppressScrollEvent: false,
+    startOffset: 0,
+    endOffset: 0,
   };
 
   // -----------------------------
@@ -102,6 +153,18 @@
   // -----------------------------
   // Helpers
   // -----------------------------
+function syncOffsetInputsToState() {
+  const si = document.getElementById("startOffsetInput");
+  const ei = document.getElementById("endOffsetInput");
+  if (si) si.value = state.startOffset;
+  if (ei) ei.value = state.endOffset;
+}
+  
+  function debounce(fn, ms) {
+  let t;
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+  
   function updateAutoScrollUi() {
   els.autoScrollToggleBtn.textContent = state.autoScrollEnabled
     ? "Auto-scroll: ON"
@@ -203,6 +266,8 @@ function setAutoScrollEnabled(enabled) {
       lyrics: String(item.lyrics || ""),
       createdAt: Number.isFinite(Number(item.createdAt)) ? Number(item.createdAt) : now,
       updatedAt: now,
+      startOffset: Number(item.startOffset) || 0,
+      endOffset: Number(item.endOffset) || 0,
     };
   }
 
@@ -219,6 +284,8 @@ function setAutoScrollEnabled(enabled) {
         lyrics: record.lyrics || "",
         createdAt: record.createdAt || Date.now(),
         updatedAt: record.updatedAt || Date.now(),
+        startOffset: record.startOffset || 0,
+        endOffset: record.endOffset || 0,
       })),
     };
 
@@ -320,16 +387,18 @@ function setAutoScrollEnabled(enabled) {
     });
   }
 
-  function computeTargetScrollFromPlayback() {
-    const durationSec = Math.max(0, state.duration || 0);
-    const currentTimeSec = clamp(state.currentTime || 0, 0, durationSec);
-    const maxScroll = getMaxScroll();
+function computeTargetScrollFromPlayback() {
+  const durationSec = Math.max(0, state.duration || 0);
+  const startOff = clamp(state.startOffset || 0, 0, durationSec);
+  const endOff   = clamp(state.endOffset   || 0, 0, durationSec - startOff);
+  const effectiveDuration = Math.max(1, durationSec - startOff - endOff);
+  const adjustedTime = clamp((state.currentTime || 0) - startOff, 0, effectiveDuration);
+  const maxScroll = getMaxScroll();
 
-    if (durationSec <= 0 || maxScroll <= 0) return 0;
+  if (maxScroll <= 0) return 0;
 
-    const progress = currentTimeSec / durationSec;
-    return maxScroll * progress;
-  }
+  return maxScroll * (adjustedTime / effectiveDuration);
+}
 
   function shouldPauseForManualScroll() {
     return Date.now() < state.userScrollPauseUntil;
@@ -469,6 +538,7 @@ function restartAutoScrollFromExternalState(force = false) {
 
     state.lastMediaKey = mediaKey;
     state.userScrollPauseUntil = 0;
+    fireTrackAnimation();
 
     let record = await getRecord(mediaKey);
 
@@ -486,6 +556,10 @@ function restartAutoScrollFromExternalState(force = false) {
 
     state.currentRecord = record;
 
+    state.startOffset = Number(record.startOffset) || 0;
+    state.endOffset   = Number(record.endOffset)   || 0;
+    syncOffsetInputsToState();
+    
     setMetaUI(title, durationSec);
     setStatus(
       playbackState,
@@ -605,6 +679,29 @@ function restartAutoScrollFromExternalState(force = false) {
     window.addEventListener("resize", () => {
       syncScrollToPlayback();
     });
+
+    const saveOffsets = debounce(async () => {
+      if (!state.currentRecord) return;
+      state.currentRecord.startOffset = state.startOffset;
+      state.currentRecord.endOffset   = state.endOffset;
+      state.currentRecord.updatedAt   = Date.now();
+      await putRecord(state.currentRecord);
+    }, 600);
+    
+    document.getElementById("startOffsetInput").addEventListener("input", e => {
+      state.startOffset = Math.max(0, Number(e.target.value) || 0);
+      if (state.playbackState !== "playing") syncScrollToPlayback();
+      saveOffsets();
+    });
+    
+    document.getElementById("endOffsetInput").addEventListener("input", e => {
+      state.endOffset = Math.max(0, Number(e.target.value) || 0);
+      if (state.playbackState !== "playing") syncScrollToPlayback();
+      saveOffsets();
+    });
+
+
+    
   }
 
   // -----------------------------
