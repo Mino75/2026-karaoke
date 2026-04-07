@@ -317,26 +317,6 @@
       display: none !important;
     }
 
-    @media (min-width: 768px) {
-      :root {
-        --pad: 18px;
-        --viewport-h: 62dvh;
-        --lyrics-font-size: 1.5rem;
-      }
-
-      #app {
-        padding-top: 22px;
-      }
-
-      .now h2 {
-        font-size: 1.46rem;
-      }
-
-      .lyrics-content {
-        padding-left: 26px;
-        padding-right: 26px;
-      }
-
       .offset-row {
         display: flex;
         gap: 16px;
@@ -394,11 +374,35 @@
         0%, 100% { background-position: 0% 50%; }
         50%       { background-position: 100% 50%; }
       }
+
+
       
       .lyrics-viewport.track-vibe {
         background-size: 300% 300%;
         animation: bgColorShift 8s ease infinite;
       }
+
+    @media (min-width: 768px) {
+      :root {
+        --pad: 18px;
+        --viewport-h: 62dvh;
+        --lyrics-font-size: 1.5rem;
+      }
+
+      #app {
+        padding-top: 22px;
+      }
+
+      .now h2 {
+        font-size: 1.46rem;
+      }
+
+      .lyrics-content {
+        padding-left: 26px;
+        padding-right: 26px;
+      }
+
+
       
       .brand p {
         max-width: 420px;
