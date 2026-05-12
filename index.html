@@ -92,21 +92,30 @@
         ></textarea>
       </section>
 
-      <section class="card player-card">
-        <div class="section-head">
-          <span class="label">Player</span>
-        </div>
-        <div class="offset-row">
-          <label class="offset-label">
-              Start offset (s)
-              <input id="startOffsetInput" type="number" min="0" step="0.5" value="0" class="offset-input" />
-          </label>
-          <label class="offset-label">
-              End offset (s)
-              <input id="endOffsetInput" type="number" min="0" step="0.5" value="0" class="offset-input" />
-          </label>
-        </div>
-      </section>
+<section class="card player-card">
+  <div class="section-head player-head">
+    <span class="label">Player</span>
+
+    <div class="player-actions">
+      <button id="playerPrevBtn" class="mini-player-btn" type="button" aria-label="Previous">⏮</button>
+      <button id="playerPlayBtn" class="mini-player-btn" type="button" aria-label="Play or pause">⏯</button>
+      <button id="playerNextBtn" class="mini-player-btn" type="button" aria-label="Next">⏭</button>
+      <button id="playerShuffleBtn" class="mini-player-btn" type="button" aria-label="Shuffle">🔀</button>
+    </div>
+  </div>
+
+  <div class="offset-row">
+    <label class="offset-label">
+      Start offset (s)
+      <input id="startOffsetInput" type="number" min="0" step="0.5" value="0" class="offset-input" />
+    </label>
+
+    <label class="offset-label">
+      End offset (s)
+      <input id="endOffsetInput" type="number" min="0" step="0.5" value="0" class="offset-input" />
+    </label>
+  </div>
+</section>
 
       
     </main>
