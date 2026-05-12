@@ -32,6 +32,10 @@
     exportBtn: document.getElementById("exportBtn"),
     importBtn: document.getElementById("importBtn"),
     importFileInput: document.getElementById("importFileInput"),
+    playerPrevBtn: document.getElementById("playerPrevBtn"),
+    playerPlayBtn: document.getElementById("playerPlayBtn"),
+    playerNextBtn: document.getElementById("playerNextBtn"),
+    playerShuffleBtn: document.getElementById("playerShuffleBtn"),
   };
 
 const TRACK_EMOJIS = [
@@ -159,6 +163,11 @@ function syncOffsetInputsToState() {
   if (si) si.value = state.startOffset;
   if (ei) ei.value = state.endOffset;
 }
+
+function sendPlayerAction(action) {
+  window.parent.postMessage({ action }, PLAYER_ORIGIN);
+}
+
   
   function debounce(fn, ms) {
   let t;
@@ -676,6 +685,23 @@ function restartAutoScrollFromExternalState(force = false) {
       }
     });
 
+
+    els.playerPlayBtn.addEventListener("click", () => {
+      sendPlayerAction("play");
+    });
+    
+    els.playerNextBtn.addEventListener("click", () => {
+      sendPlayerAction("next");
+    });
+    
+    els.playerPrevBtn.addEventListener("click", () => {
+      sendPlayerAction("previous");
+    });
+    
+    els.playerShuffleBtn.addEventListener("click", () => {
+      sendPlayerAction("random");
+    });
+        
     window.addEventListener("resize", () => {
       syncScrollToPlayback();
     });
