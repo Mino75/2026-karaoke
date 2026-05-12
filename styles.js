@@ -55,6 +55,8 @@
       font: inherit;
     }
 
+
+
     #app {
       width: 100%;
       max-width: 760px;
@@ -186,6 +188,37 @@
       margin-bottom: 12px;
       flex-wrap: wrap;
     }
+
+    .player-head {
+      gap: 0.75rem;
+    }
+    
+    .player-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      margin-left: auto;
+    }
+    
+    .mini-player-btn {
+      width: 2rem;
+      height: 2rem;
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.06);
+      color: inherit;
+      cursor: pointer;
+      font-size: 0.95rem;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .mini-player-btn:active {
+      transform: scale(0.94);
+    }
+
 
     .lyrics-actions {
       display: flex;
