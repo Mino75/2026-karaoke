@@ -390,8 +390,8 @@
 
 
       @keyframes emojiTraverse {
-        from { transform: translateX(-150px); }
-        to   { transform: translateX(calc(100vw + 150px)); }
+        from { transform: translateX(-150px) scaleX(-1); }
+        to   { transform: translateX(calc(100vw + 150px)) scaleX(-1); }
       }
       
       .emoji-runner {
